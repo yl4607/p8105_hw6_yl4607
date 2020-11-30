@@ -1,0 +1,76 @@
+---
+title: "Homework 6"
+author: "Yue Liu"
+date: '`r format(Sys.time(), "%Y-%m-%d")`'
+output: github_document
+
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(rvest)
+library(readxl)
+library(patchwork)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_color_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+
+## Problem 1
+
+Read in the data 
+
+```{r}
+homicide_df = 
+  read_csv("data/homicide-data.csv") %>% 
+  mutate(
+    city_state = str_c(city, state, sep = ", "),
+    victim_age = as.numeric(victim_age),
+    resolution = case_when(
+      disposition == "Closed without arrest" ~ 0,
+      disposition == "Open/No arrest"        ~ 0,
+      disposition == "Closed by arrest"      ~ 1
+    )
+  ) %>% 
+  filter(city_state != "Tulsa_AL",
+         victim_race %in% c("White", "Black")) %>% 
+  select(city_state, resolution, victim_age, victim_race, victim_sex)
+```
+
+start with one city
+
+```{r}
+baltimore_df =
+  homicide_df %>% 
+  filter(city_state == "Baltimore, MD")
+
+# generalized regression model
+glm(resolution ~ victim_age + victim_race + victim_sex,
+    data = baltimore_df,
+    family = binomial()) %>%  # need to specify distribution
+  broom::tidy() %>% # estimate is reported as log odds ratio; race shows in 5 subgroups
+  mutate(
+    OR = exp(estimate),
+    CI_lower = exp(estimate - 1.96 * std.error),
+    CI_upper = exp(estimate + 1.96 * std.error)
+  ) %>% 
+  select(term, OR, starts_with("CI")) %>% 
+  knitr::kable(digits = 3)
+```
+
