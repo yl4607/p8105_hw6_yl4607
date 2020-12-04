@@ -129,7 +129,7 @@ birthweight_df =
          )
 ```
 
-Import the data and convert `babysex`, `frace`(father's race), `mrace`(mother's race), and `malform`(presence of malformations) to factor. 
+Import dataset and convert `babysex`, `frace`(father's race), `mrace`(mother's race), and `malform`(presence of malformations) to factor. 
 
 Since there is no further information on which predictors might be more significant, I used backward stepwise regression to select variables.
 
@@ -154,31 +154,137 @@ summary(my_model)
 
 According to the results, my model will contain predictors `babysex`, `bhead`(baby's head circumference), `blength` (baby's length at birth), `delwt`(mother's weight), `fincome`(family monthly income), `gaweeks`(gestational age in weeks), `mheight`(mother's height), `mrace`(mother's race), `parity`(number of live births prior to this pregnancy), `ppwt` (mother's pre-preg weight), and `smoken` (average numbers of cigarettes smoked during pregnancy)
 
+Plot of model residuals against fitted values.
+
+```{r}
+ggplot() +
+  geom_point( 
+    data = birthweight_df %>% 
+      add_residuals(my_model) %>% 
+      add_predictions(my_model),
+    alpha = 0.5) +
+  aes(x = pred, y = resid) +
+  labs(title = "Residual Plot",  
+       x = "Predicted/Fitted value", 
+       y = "Residual") 
+```
+
+cross validation using `modelr`
 
 ```{r}
 cv_df = 
   crossv_mc(birthweight_df, 100) %>% 
   mutate(
     train = map(train, as_tibble),
-    test = map(test, as_tibble)
-  )
-```
+    test = map(test, as_tibble))
 
-Fit the models.
+cv_df = 
+  cv_df %>% 
+  mutate(
+    my_mod = map(.x = train, ~ lm(bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt +smoken, data = .x)),
+    mod_1 = map(.x = train, ~ lm(bwt ~ blength + gaweeks, data = .x)),
+    mod_2 = map(.x = train, ~ lm(bwt ~ blength * bhead * babysex, data = .x))
+    ) %>%
+  mutate(
+    rmse_my = map2_dbl(.x = my_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_1 = map2_dbl(.x = mod_1, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_2 = map2_dbl(.x = mod_2, .y = test, ~rmse(model = .x, data = .y))
+)
+```
 
 ```{r}
-# cv_df = 
-#   cv_df %>% 
-#   mutate(
-#     linear_mod = map(.x = train, ~lm(y ~ x, data = .x)),
-#     smooth_mod = map(.x = train, ~gam(y ~ s(x), data = .x)),
-#     wiggly_mod = map(.x = train, ~gam(y ~ s(x, k = 30), sp = 10e-6, data = .x))
-#   ) %>% 
-#   mutate(
-#     rmse_linear = map2_dbl(.x = linear_mod, .y = test, ~rmse(model = .x, data = .y)),
-#     rmse_smooth = map2_dbl(.x = smooth_mod, .y = test, ~rmse(model = .x, data = .y)),
-#     rmse_wiggly = map2_dbl(.x = wiggly_mod, .y = test, ~rmse(model = .x, data = .y))
-#   )
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()
 ```
 
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  group_by(model) %>% 
+  summarize(avg_rmse = mean(rmse))
+```
+
+## Problem 3
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+```{r}
+boot_results = 
+  weather_df %>% 
+  bootstrap(100, id = "strap_number") %>% 
+  mutate(
+    models = map(.x = strap, ~ lm(tmax ~ tmin, data = .x)),
+    results = map(models, broom::tidy)
+  ) %>% 
+  unnest(results) %>% 
+  mutate(r_square = map(models, broom::glance)) %>% 
+  select(strap_number, term, estimate, r_square) %>% 
+  unnest(r_square) %>% 
+  select(strap_number, term, estimate, r.squared)
+```
+
+```{r}
+boot_results = 
+  boot_results %>% 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) %>% 
+  janitor::clean_names() %>% 
+  mutate(log = log(tmin*intercept))
+```
+
+Distribution plot of $$\hat r^2$$
+
+```{r}
+boot_results %>% 
+  ggplot(aes(x = r_squared)) +
+  geom_density()
+```
+
+Distribution plot of $$log(\hat{\beta_0}*\hat{\beta_1}) $$
+
+```{r}
+boot_results %>% 
+  ggplot(aes(x = log)) +
+  geom_density()
+```
+
+95% Confidence Interval for $$\hat r^2$$ and $$log(\hat{\beta_0}*\hat{\beta_1}) $$:
+
+```{r}
+boot_results %>% 
+  summarize(
+    r2_ci_lower = quantile(r_squared, 0.025),
+    r2_ci_upper = quantile(r_squared, 0.975),
+    beta_ci_lower = quantile(log, 0.025),
+    beta_ci_upper = quantile(log, 0.975)
+  )
+```
 
