@@ -260,7 +260,7 @@ boot_results =
   mutate(log = log(tmin*intercept))
 ```
 
-Distribution plot of $$\hat r^2$$
+Distribution plot of r^2
 
 ```{r}
 boot_results %>% 
@@ -268,7 +268,7 @@ boot_results %>%
   geom_density()
 ```
 
-Distribution plot of $$log(\hat{\beta_0}*\hat{\beta_1}) $$
+Distribution plot of log(beta0*beta1)
 
 ```{r}
 boot_results %>% 
@@ -276,7 +276,7 @@ boot_results %>%
   geom_density()
 ```
 
-95% Confidence Interval for $$\hat r^2$$ and $$log(\hat{\beta_0}*\hat{\beta_1}) $$:
+95% Confidence Interval for r^2 and log(beta0*beta1):
 
 ```{r}
 boot_results %>% 
