@@ -138,18 +138,6 @@ my_model = lm(bwt ~ ., data = birthweight_df) %>%
   step(direction = 'backward', trace = 0)
 
 summary(my_model)
-
-# glm(bwt ~ ., data = birthweight_df) %>% 
-#   step(direction = 'both',
-#        scope = list(lower = . ~ 1,
-#                     uppwer = .~.^2),
-#        trace = 0)
-# 
-# terms(my_model) %>% 
-#   attr("term.labels") %>% 
-#   str_c(., collapse =  "+") %>% 
-#   str_c("bwt ~ ",.) %>% 
-#   as.formula()
 ```
 
 According to the results, my model will contain predictors `babysex`, `bhead`(baby's head circumference), `blength` (baby's length at birth), `delwt`(mother's weight), `fincome`(family monthly income), `gaweeks`(gestational age in weeks), `mheight`(mother's height), `mrace`(mother's race), `parity`(number of live births prior to this pregnancy), `ppwt` (mother's pre-preg weight), and `smoken` (average numbers of cigarettes smoked during pregnancy)
@@ -205,6 +193,8 @@ cv_df %>%
   geom_violin()
 ```
 
+From the plot we can see that `my model` has the lowest rmse among all three polts. 
+
 ```{r}
 cv_df %>% 
   select(starts_with("rmse")) %>% 
@@ -215,10 +205,13 @@ cv_df %>%
     names_prefix = "rmse_"
   ) %>% 
   group_by(model) %>% 
-  summarize(avg_rmse = mean(rmse))
+  summarize(avg_rmse = mean(rmse)) %>% 
+  knitr::kable()
 ```
 
 ## Problem 3
+
+Load in data
 
 ```{r}
 weather_df = 
@@ -234,10 +227,14 @@ weather_df =
   select(name, id, everything())
 ```
 
+Bootstap 5000 samples:
+
 ```{r}
+set.seed(1)
+
 boot_results = 
   weather_df %>% 
-  bootstrap(100, id = "strap_number") %>% 
+  bootstrap(5000, id = "strap_number") %>% 
   mutate(
     models = map(.x = strap, ~ lm(tmax ~ tmin, data = .x)),
     results = map(models, broom::tidy)
@@ -260,21 +257,27 @@ boot_results =
   mutate(log = log(tmin*intercept))
 ```
 
-Distribution plot of r^2
+Distribution plot of r^2.
 
 ```{r}
 boot_results %>% 
   ggplot(aes(x = r_squared)) +
-  geom_density()
+  geom_density() +
+  labs(title = "distribution plot of r^2")
 ```
+
+From the plot we can see a bell-shaped distribution with a median value at about 0.91, indicating then normal distribution of r^2.
 
 Distribution plot of log(beta0*beta1)
 
 ```{r}
 boot_results %>% 
   ggplot(aes(x = log)) +
-  geom_density()
+  geom_density()+
+  labs(title = "distribution plot of coefficients")
 ```
+
+From the plot we can see a bell-shaped distribution with a median value at about 2.00, indicating then normal distribution of log(beta0*beta1).
 
 95% Confidence Interval for r^2 and log(beta0*beta1):
 
@@ -287,4 +290,8 @@ boot_results %>%
     beta_ci_upper = quantile(log, 0.975)
   )
 ```
+
+The 95% confidence interval for r^2 is (0.894, 0.927).
+
+The 95% confidence interval for log(beta0*beta1) is (1.96, 2.06).
 
